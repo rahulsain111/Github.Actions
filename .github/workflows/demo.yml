@@ -1,0 +1,19 @@
+name: Hello World Workflow
+
+# Trigger the workflow manually from the Actions tab
+on: 
+  workflow_dispatch:
+
+jobs:
+  say-hello:
+    # Use the latest Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+      # A simple shell command
+      - name: Greet the user
+        run: echo "Hello, World! 🚀"
+
+      # Another step to show the current date
+      - name: Show Timestamp
+        run: date
