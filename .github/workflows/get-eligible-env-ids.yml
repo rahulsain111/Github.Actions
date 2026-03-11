@@ -35,18 +35,18 @@ jobs:
 
       - name: Run get-eligible-env-ids.sh
         run: |
-          chmod +x scripts/get-eligible-env-ids.sh
+          chmod +x get-eligible-env-ids.sh
           
           if [ "${{ inputs.debug }}" = "true" ]; then
             if [ -n "${{ inputs.organization_id }}" ]; then
-              ./scripts/get-eligible-env-ids.sh -d "${{ inputs.organization_id }}" "${{ inputs.tag_name }}"
+              ./get-eligible-env-ids.sh -d "${{ inputs.organization_id }}" "${{ inputs.tag_name }}"
             else
-              ./scripts/get-eligible-env-ids.sh -d "${{ inputs.tag_name }}"
+              ./get-eligible-env-ids.sh -d "${{ inputs.tag_name }}"
             fi
           else
             if [ -n "${{ inputs.organization_id }}" ]; then
-              ./scripts/get-eligible-env-ids.sh "${{ inputs.organization_id }}" "${{ inputs.tag_name }}"
+              ./get-eligible-env-ids.sh "${{ inputs.organization_id }}" "${{ inputs.tag_name }}"
             else
-              ./scripts/get-eligible-env-ids.sh "${{ inputs.tag_name }}"
+              ./get-eligible-env-ids.sh "${{ inputs.tag_name }}"
             fi
           fi
