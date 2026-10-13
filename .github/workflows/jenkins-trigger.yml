@@ -1,26 +1,130 @@
-name: Jenkins Trigger
+name: Auto Deploy to Staging
 
 on:
+  # Trigger when pipeline.env changes on main branch
+  push:
+    branches:
+      - main
+    paths:
+      - '.acquia/pipeline.env'
+
+  # Manual trigger for testing
   workflow_dispatch:
     inputs:
       tag_name:
-        description: Tag name
-        required: true
-        default: 3.26.6
+        description: Tag name (leave empty to read from pipeline.env)
+        required: false
 
 jobs:
-  trigger:
+  deploy-staging:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Jenkins
-        env:
-          TAG: ${{ github.event.inputs.tag_name }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check if STAGE_RELEASE changed
+        id: check
         run: |
+          # Get current STAGE_RELEASE
+          CURRENT_STAGE=$(grep '^STAGE_RELEASE=' .acquia/pipeline.env | cut -d'=' -f2)
+          echo "Current STAGE_RELEASE: ${CURRENT_STAGE}"
+
+          # For manual trigger, use input or current value
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+              STAGE_VERSION="${{ github.event.inputs.tag_name }}"
+            else
+              STAGE_VERSION="${CURRENT_STAGE}"
+            fi
+            echo "CHANGED=true" >> $GITHUB_OUTPUT
+            echo "VERSION=${STAGE_VERSION}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For push trigger, check if STAGE_RELEASE changed
+          git show HEAD~1:.acquia/pipeline.env > /tmp/old_pipeline.env 2>/dev/null || echo "" > /tmp/old_pipeline.env
+          OLD_STAGE=$(grep '^STAGE_RELEASE=' /tmp/old_pipeline.env | cut -d'=' -f2 || echo "")
+
+          echo "Previous STAGE_RELEASE: ${OLD_STAGE}"
+
+          if [ "${CURRENT_STAGE}" != "${OLD_STAGE}" ] && [ -n "${CURRENT_STAGE}" ]; then
+            echo "STAGE_RELEASE changed from ${OLD_STAGE} to ${CURRENT_STAGE}"
+            echo "CHANGED=true" >> $GITHUB_OUTPUT
+            echo "VERSION=${CURRENT_STAGE}" >> $GITHUB_OUTPUT
+          else
+            echo "STAGE_RELEASE not changed, skipping deployment"
+            echo "CHANGED=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wait for CI to pass
+        if: steps.check.outputs.CHANGED == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.VERSION }}"
+          echo "Waiting for CI checks to pass for version ${VERSION}..."
+
+          # Wait up to 30 minutes for CI
+          for i in {1..60}; do
+            # Get commit SHA for the tag/version
+            COMMIT_SHA=$(git rev-parse HEAD)
+
+            # Check GitHub CI status
+            STATUS=$(curl -s \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/check-runs" \
+              | jq -r '
+                if (.check_runs | length) == 0 then
+                  "PENDING"
+                elif [.check_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled")] | length > 0 then
+                  "FAILED"
+                elif [.check_runs[] | select(.status != "completed")] | length > 0 then
+                  "PENDING"
+                else
+                  "SUCCESS"
+                end
+              ')
+
+            echo "CI Status: ${STATUS}"
+
+            if [ "${STATUS}" == "SUCCESS" ]; then
+              echo "CI checks passed!"
+              break
+            elif [ "${STATUS}" == "FAILED" ]; then
+              echo "CI checks failed!"
+              exit 1
+            fi
+
+            echo "Waiting 30 seconds..."
+            sleep 30
+          done
+
+      - name: Trigger Jenkins Deployment
+        if: steps.check.outputs.CHANGED == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.VERSION }}"
           URL="https://cloudbees.ais.acquia.io/dat-ops-jenkins"
           JOB="HAAS-DRUPAL%2Fauto-deploy-staging"
           TOKEN="staging-deploy-token"
           ENV_IDS="58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f"
-          echo "Triggering Jenkins build..."
-          echo "Job: HAAS-DRUPAL/auto-deploy-staging"
-          echo "Tag: ${TAG}"
-          curl -v -X POST "${URL}/buildByToken/buildWithParameters?job=${JOB}&token=${TOKEN}&TAG_NAME=${TAG}&STAGING_ENV_IDS=${ENV_IDS}"
+
+          echo "Triggering Jenkins deployment..."
+          echo "Version: ${VERSION}"
+          echo "Staging Env IDs: ${ENV_IDS}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${URL}/buildByToken/buildWithParameters?job=${JOB}&token=${TOKEN}&TAG_NAME=${VERSION}&STAGING_ENV_IDS=${ENV_IDS}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "Response Code: ${HTTP_CODE}"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Jenkins build triggered successfully!"
+          else
+            echo "Failed to trigger Jenkins build"
+            echo "$BODY"
+            exit 1
+          fi
