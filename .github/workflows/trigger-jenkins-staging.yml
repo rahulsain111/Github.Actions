@@ -13,5 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call Jenkins
-        run: |
-          curl -v -X POST "https://cloudbees.ins/buildByToken/buildWithParameters?job=HAAS-DRUPAL/auto-deploy-staging&token=staging-deploy-token&TAG_NAME=${{ github.event.inputs.tag_name }}&STAGING_ENV_IDS=58413-bdd0c769-f692-44bc-9
+        env:
+          TAG: ${{ github.event.inputs.tag_name }}
+          ENV_IDS: 58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f
+        run: curl -v -X POST "https://cloudbees.ais.acquia.io/dat-ops-jenkins/buildByToken/buildWithParameters?job=HAAS-DRUPAL/auto-deploy-staging&token=staging-deploy-token&TAG_NAME=${TAG}&STAGING_ENV_IDS=${ENV_IDS}"
