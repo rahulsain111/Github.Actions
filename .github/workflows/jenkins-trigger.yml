@@ -1,4 +1,4 @@
-name: Trigger Jenkins
+name: Jenkins Trigger
 
 on:
   workflow_dispatch:
@@ -20,4 +20,7 @@ jobs:
           JOB="HAAS-DRUPAL/auto-deploy-staging"
           TOKEN="staging-deploy-token"
           ENV_IDS="58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f"
+          echo "Triggering: ${URL}/buildByToken/buildWithParameters"
+          echo "Job: ${JOB}"
+          echo "Tag: ${TAG}"
           curl -v -X POST "${URL}/buildByToken/buildWithParameters?job=${JOB}&token=${TOKEN}&TAG_NAME=${TAG}&STAGING_ENV_IDS=${ENV_IDS}"
