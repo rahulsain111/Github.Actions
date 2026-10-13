@@ -4,30 +4,20 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name to deploy (e.g., 3.26.6)'
+        description: 'Tag name to deploy'
         required: true
         default: '3.26.6'
 
 jobs:
   trigger-jenkins:
     runs-on: ubuntu-latest
-    env:
-      JENKINS_URL: https://cloudbees.ais.acquia.io/dat-ops-jenkins
-      STAGING_ENV_IDS: 58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f
-      BUILD_TOKEN: staging-deploy-token
     steps:
       - name: Trigger Jenkins Build
+        env:
+          TAG_NAME: ${{ github.event.inputs.tag_name }}
+          JENKINS_URL: https://cloudbees.ais.acquia.io/dat-ops-jenkins
+          STAGING_ENV_IDS: 58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f
+          BUILD_TOKEN: staging-deploy-token
         run: |
-          TAG_NAME="${{ github.event.inputs.tag_name }}"                                                                        echo "Triggering deployment for tag
-                                                                                                                                # Try without authentication - just
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \                                                              "$JENKINS_URL/job/HAAS-DRUPAL/jobWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS")                                                                              
-          echo "=== Response ==="                                                                                               echo "$RESPONSE"
-                                                                                                                                HTTP_CODE=$(echo "$RESPONSE" | tail
-                                                                                                                                if [ "$HTTP_CODE" = "201" ] || [ "$
-            echo "✅ Jenkins build triggered successfully!"                                                                     else
-            echo "❌ HTTP: $HTTP_CODE - Trying with GET method..."                                                    
-            # Some Jenkins setups prefer GET for remote triggers                                                                  RESPONSE2=$(curl -s -w "\nHTTP_CO
-              "$JENKINS_URL/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS")
-
-            echo "$RESPONSE2"
-          fi
+          echo "Triggering deployment for tag: $TAG_NAME"
+          curl -v -X POST "$JENKINS_URL/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS"
