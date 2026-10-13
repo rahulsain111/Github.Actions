@@ -1,23 +1,17 @@
-name: Trigger Jenkins Auto-Deploy Staging
+name: Trigger Jenkins
 
 on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name to deploy'
+        description: Tag name
         required: true
-        default: '3.26.6'
+        default: 3.26.6
 
 jobs:
-  trigger-jenkins:
+  trigger:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Jenkins Build
-        env:
-          TAG_NAME: ${{ github.event.inputs.tag_name }}
-          JENKINS_URL: https://cloudbees.ais.acquia.io/dat-ops-jenkins
-          STAGING_ENV_IDS: 58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f
-          BUILD_TOKEN: staging-deploy-token
+      - name: Call Jenkins
         run: |
-          echo "Triggering deployment for tag: $TAG_NAME"
-          curl -v -X POST "$JENKINS_URL/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS"
+          curl -v -X POST "https://cloudbees.ais.acquia.io/dat-ops-jenkins/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=staging-deploy-token&TAG_NAME=${{ github.event.inputs.tag_name }}&STAGING_ENV_IDS=58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f"
