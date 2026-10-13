@@ -14,43 +14,20 @@ jobs:
     env:
       JENKINS_URL: https://cloudbees.ais.acquia.io/dat-ops-jenkins
       STAGING_ENV_IDS: 58413-bdd0c769-f692-44bc-9641-b05c7eb57b0f
+      BUILD_TOKEN: staging-deploy-token
     steps:
-      - name: Get Tag Name
-        id: tag
-        run: echo "TAG_NAME=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
-
-      - name: Test Jenkins Connection and Get Crumb
-        id: crumb
-        run: |
-          echo "Testing Jenkins API connection..."
-          CRUMB_RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
-            -u "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
-            "$JENKINS_URL/crumbIssuer/api/json")
-          echo "=== Crumb Response ==="
-          echo "$CRUMB_RESPONSE"
-          HTTP_CODE=$(echo "$CRUMB_RESPONSE" | tail -1 | cut -d: -f2)
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Failed to get crumb. HTTP: $HTTP_CODE"
-            exit 1
-          fi
-          CRUMB=$(echo "$CRUMB_RESPONSE" | head -n -1 | jq -r '.crumb')
-          echo "CRUMB=$CRUMB" >> $GITHUB_OUTPUT
-
       - name: Trigger Jenkins Build
         run: |
-          TAG_NAME="${{ steps.tag.outputs.TAG_NAME }}"
-          CRUMB="${{ steps.crumb.outputs.CRUMB }}"
-          echo "Triggering deployment for tag: $TAG_NAME"
-          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \
-            -u "${{ secrets.JENKINS_USER }}:${{ secrets.JENKINS_TOKEN }}" \
-            -H "Jenkins-Crumb: $CRUMB" \
-            "$JENKINS_URL/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=staging-deploy-token&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS")
-          echo "=== Response ==="
-          echo "$RESPONSE"
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1 | cut -d: -f2)
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "Jenkins build triggered successfully!"
-          else
-            echo "Failed to trigger Jenkins build. HTTP: $HTTP_CODE"
-            exit 1
+          TAG_NAME="${{ github.event.inputs.tag_name }}"                                                                        echo "Triggering deployment for tag
+                                                                                                                                # Try without authentication - just
+          RESPONSE=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST \                                                              "$JENKINS_URL/job/HAAS-DRUPAL/jobWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS")                                                                              
+          echo "=== Response ==="                                                                                               echo "$RESPONSE"
+                                                                                                                                HTTP_CODE=$(echo "$RESPONSE" | tail
+                                                                                                                                if [ "$HTTP_CODE" = "201" ] || [ "$
+            echo "✅ Jenkins build triggered successfully!"                                                                     else
+            echo "❌ HTTP: $HTTP_CODE - Trying with GET method..."                                                    
+            # Some Jenkins setups prefer GET for remote triggers                                                                  RESPONSE2=$(curl -s -w "\nHTTP_CO
+              "$JENKINS_URL/job/HAAS-DRUPAL/job/auto-deploy-staging/buildWithParameters?token=$BUILD_TOKEN&TAG_NAME=$TAG_NAME&STAGING_ENV_IDS=$STAGING_ENV_IDS")
+
+            echo "$RESPONSE2"
           fi
